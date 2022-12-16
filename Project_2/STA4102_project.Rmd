@@ -1,0 +1,491 @@
+---
+title: "STA 4102 Project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Emily Mendez
+
+## Summary of Data
+
+This Dataset is taken from the City of San Jose Department of Transportation Website. This data describes the crashes that occurred in the city from 2021 to present day; last updated on October 24, 2022, 1:45 AM (UTC-04:00). Variables listed include but are not limited to sex, Age, vehicle count,Sobriety, Fatal injuries, weather collision type, etc. Most of this data is qualitative, categorical data. The question we will be asking is whether we can predict which the highest type of injury a crash will cause
+
+We will be using a XGBoost and a decision tree. 
+<br>
+
+## Preparing Data 
+
+<br>
+
+**Importing data**
+
+```{r}
+VehicleData=read.csv('/Users/admin/Documents/Csvv/Project_Data/vehiclecrashdata2021-present.csv',
+                   header=TRUE,na.strings=c("","Unknown","Not Applicable"),stringsAsFactors = T)
+
+CrashData=read.csv('/Users/admin/Documents/Csvv/Project_Data/crashdata2021-present.csv',
+                  header=TRUE,na.strings=c("","Unknown","Not Applicable"),stringsAsFactors = T)
+
+
+```
+
+<br>
+
+**Loading Libraries**
+
+```{r}
+library(caret)
+library(dplyr)
+library(xgboost)
+library(pROC)
+
+```
+
+<br>
+
+
+**Joining the DataSets**
+
+```{r}
+JoinedData=merge(VehicleData,CrashData,
+           by="CrashName",all=TRUE)
+str(JoinedData)
+
+```
+
+
+<br> 
+
+```{r}
+#Lots of Na values seen 
+head(JoinedData)
+```
+
+<br>
+
+**NA Values**
+
+```{r}
+#Which columns are the NA values in 
+colSums(is.na(JoinedData))
+```
+
+<br>
+
+**Removing un-neededcolumns and NAs**
+
+```{r}
+#To remove name, Speed,ViolationCode,CrashFactID,TcrNumber,ShortFromFlag ,distance, and comments category 
+#removing Pedestrian Direction, Traffic control , vehicle count only has 1 level
+#removing age due to high Age == 0 considered NA value. 
+JoinedDataNoColNa=JoinedData[,-c(2,4,5,12,13,14,15,16,21,23,24,25,36,37,39)]
+
+#removing
+colSums(is.na(JoinedDataNoColNa))
+
+```
+
+
+```{r}
+#removing Na rows
+JoinedDataNoNa=na.omit(JoinedDataNoColNa)
+
+#dimensions
+dim(JoinedDataNoNa)
+
+```
+<br>
+
+
+## Predict Whether The Accident Will have injuries In Original Na dataset
+
+```{r}
+#Implying at least 1 fatal injury per crash 
+FatalIn=length(which(JoinedData$FatalInjuries>0))
+
+#Implying at least 1 severe injury per crash 
+SevereIn=length(which(JoinedData$SevereInjuries>0))
+  
+#Implying at least 1 moderate injury per crash 
+ModerateIn=length(which(JoinedData$ModerateInjuries>0))
+  
+#Implying at least 1 minor injury per crash 
+MinorIn=length(which(JoinedData$MinorInjuries>0))
+
+```
+
+
+```{r}
+#Total number of crashes in our dataset
+TotCrashes=length(JoinedData$CrashName)
+
+#percentages
+CountFat=FatalIn/TotCrashes
+CountSev=SevereIn/TotCrashes
+CountMod=ModerateIn/TotCrashes
+CountMin=MinorIn/TotCrashes
+
+print(paste("The probability that at least 1 fatal injury will occur in this data set is",
+            round(CountFat,3)*100,"%"))
+print(paste("The probability that at least 1 severe injury will occur in this data set is",
+            round(CountSev,3)*100,"%"))
+print(paste("The probability that at least 1 moderate injury will occur in this data set is",
+            round(CountMod,3)*100,"%"))
+print(paste("The probability that at least 1 minor injury will occur in this data set is",
+            round(CountMin,3)*100,"%"))
+
+
+```
+Not many fatal accidents are given in this dataset compared to the number of accidents the dataset has. It doesnt feel meaningful enough to predict the fatalities in a crash. Instead we can predict the highest type of injury a crash will cause. 
+
+<br>
+
+```{r}
+#Implying that the probability of being in a crash where there will be at least 1 kind of injury 
+
+RowFatal=which(JoinedData$FatalInjuries>0)
+RowSevere=which(JoinedData$SevereInjuries>0)
+RowModerate=which(JoinedData$ModerateInjuries>0)
+RowMinor=which(JoinedData$MinorInjuries>0)
+
+#Number of crashes with at least 1 type of crash injury 
+temp=c(RowFatal,RowSevere,RowModerate,RowMinor)
+JoinedDataMod=JoinedData[temp,]
+TotCrash1Inj=length(JoinedDataMod$CrashName)
+
+
+TotalInjury=TotCrash1Inj/TotCrashes
+print(paste("The probability that at least 1 injury will occur in the NaDataSet is",
+            round(TotalInjury,3)*100,"%"))
+
+```
+
+<br>
+
+
+## Predict Whether The Accident Will have injuries NoNa Dataset
+This Dataset is $\approx 45 \%$ of the number of observations in the Na Dataset
+
+
+```{r}
+#Implying at least 1 fatal injury per crash 
+FatalInNN=length(which(JoinedDataNoNa$FatalInjuries>0))
+
+#Implying at least 1 severe injury per crash 
+SevereInNN=length(which(JoinedDataNoNa$SevereInjuries>0))
+  
+#Implying at least 1 moderate injury per crash 
+ModerateInNN=length(which(JoinedDataNoNa$ModerateInjuries>0))
+  
+#Implying at least 1 minor injury per crash 
+MinorInNN=length(which(JoinedDataNoNa$MinorInjuries>0))
+```
+
+
+```{r}
+#Total number of crashes in our dataset
+TotCrashesN=length(JoinedDataNoNa$CrashName)
+
+#percentages
+CountFatN=FatalInNN/TotCrashesN
+CountSevN=SevereInNN/TotCrashesN
+CountModN=ModerateInNN/TotCrashesN
+CountMinN=MinorInNN/TotCrashesN
+
+print(paste("The probability that at least 1 fatal injury will occur in this data set is",
+            round(CountFatN,3)*100,"%"))
+print(paste("The probability that at least 1 severe injury will occur in this data set is",
+            round(CountSevN,3)*100,"%"))
+print(paste("The probability that at least 1 moderate injury will occur in this data set is",
+            round(CountModN,3)*100,"%"))
+print(paste("The probability that at least 1 minor injury will occur in this data set is",
+            round(CountMinN,3)*100,"%"))
+
+
+```
+
+<br>
+
+```{r}
+#Implying that the probability of being in a crash where there will be at least 1 kind of injury 
+
+RowFatalN=which(JoinedDataNoNa$FatalInjuries>0)
+RowSevereN=which(JoinedDataNoNa$SevereInjuries>0)
+RowModerateN=which(JoinedDataNoNa$ModerateInjuries>0)
+RowMinorN=which(JoinedDataNoNa$MinorInjuries>0)
+
+#Number of crashes with at least 1 type of crash injury 
+tempN=c(RowFatalN,RowSevereN,RowModerateN,RowMinorN)
+JoinedDataNMod=JoinedDataNoNa[tempN,]
+TotCrash1InjN=length(JoinedDataNMod$CrashName)
+
+
+TotalInjuryN=TotCrash1InjN/TotCrashesN
+print(paste("The probability that at least 1 injury will occur in the NoNaDataSet is",
+            round(TotalInjuryN,3)*100,"%"))
+
+```
+
+<br>
+
+
+## Lets Explore Injuries and Other Factors
+
+Since we have a higher percentage of our accidents beinf minor we will explore the relationship of the number of minor injuries and various categorical variables. 
+
+<br>
+
+```{r}
+boxplot(JoinedDataNoNa$MinorInjuries~JoinedDataNoNa$PartyType,names=c(1:length(levels(JoinedDataNoNa$PartyType))))
+levels(JoinedDataNoNa$PartyType)
+```
+\newline
+
+There doesn't seem to be any significant difference here except that a car with a trailer might end up having more minor injuries than other levels. Though there are quite a bit of outliers on this graph. 
+
+<br>
+
+
+```{r}
+boxplot(JoinedDataNoNa$MinorInjuries~JoinedDataNoNa$RoadwayCondition,names=c(1:8))
+levels(JoinedDataNoNa$RoadwayCondition)
+length(levels(JoinedDataNoNa$RoadwayCondition))
+```
+
+\newline
+
+More people get minor accidents from Deep rut holes than other levels of roadway conditions. 
+
+<br>
+
+## Response Column
+
+Creating a new categorical column where 0 is no injury, 1 is a minor injury, 2 is a moderate injury, 3 is a severe injury and 4 is a fatal injury. We categorize our new column by finding the number of injuries in each category and using the highest level of injury as the injury type. Such as if we have 3 minor injuries and 1 fatal injury the highest injury type is a 4. 
+
+
+```{r}
+#creating new column in Dataframe 
+
+NoNaFullCrashCol=
+(JoinedDataNoNa %>%
+  mutate(HighestInjuryType=
+        case_when(
+        FatalInjuries>0 ~ 4,
+        SevereInjuries>0 ~3,
+        ModerateInjuries>0 ~ 2,
+        MinorInjuries>0 ~1,
+        TRUE ~ 0)
+        ,.keep=c("none")
+        ))
+
+```
+
+<br>
+
+## Data Factoring
+
+```{r}
+#removing 1st col
+JoinedDataNoNa=JoinedDataNoNa[,-c(1,8,9,10,11)]
+str(JoinedDataNoNa)
+```
+
+<br>
+
+
+```{r}
+#Transforming data 
+options("contrasts") 
+newData=model.matrix(~. ,data=JoinedDataNoNa )
+
+NoNaFullCrashDataBC=as.data.frame(newData)
+```
+<br>
+
+```{r}
+#adding in response column 
+
+NoNaFullCrashData=cbind(NoNaFullCrashDataBC,NoNaFullCrashCol)
+
+```
+
+
+<br>
+
+## Data Partitioning
+
+```{r}
+Crash.label=NoNaFullCrashData$HighestInjuryType
+NoNaFullCrashData$HighestInjuryType=NULL
+label=Crash.label
+```
+
+<br>
+
+```{r}
+nn=nrow(NoNaFullCrashData)
+row=0.5
+```
+
+<br>
+
+```{r}
+
+trainingInd=sample(nn,floor(row*nn))
+training.data=as.matrix(NoNaFullCrashData[trainingInd,])
+training.labels=label[trainingInd]
+
+```
+
+```{r}
+
+testing.data=as.matrix(NoNaFullCrashData[-trainingInd,])
+testing.labels=label[-trainingInd]
+
+```
+
+
+<br>
+
+```{r}
+
+xgb.train = xgb.DMatrix(data=training.data,label=training.labels)
+xgb.test = xgb.DMatrix(data=testing.data,label=testing.labels)
+```
+
+
+<br>
+
+```{r}
+numClass=length(levels(as.factor(label)))
+param=list("objective" = "multi:softmax", eta=0.05, subsample=0.5, max_depth=4)
+```
+
+<br>
+
+```{r}
+#fitting XGboost
+xgb.fit = xgb.train( params=param, data=xgb.train,nrounds=500,num_class=5, 
+                     watchlist=list(val1=xgb.train,val2=xgb.test),
+                     verbose=0 )
+```
+
+<br>
+
+```{r}
+xgb.pred = predict(xgb.fit,newdata=testing.data,reshape=T,type="response")
+
+```
+
+
+<br>
+
+```{r}
+confusionMatrix(table(xgb.pred,testing.labels))
+
+```
+
+\newline
+
+The Accuracy of our model is $\approx 52 \%$. Where the class that is best predicted would be minor injuries as expected since minor crashes happen more frequently than any other.
+
+
+<br>
+
+
+```{r}
+#creating importiance plot
+colNam=colnames(training.data)
+importance= xgb.importance(colNam, model = xgb.fit)
+xgb.plot.importance(importance)
+
+```
+
+<br>
+
+```{r}
+head(importance)
+
+
+```
+
+<br>
+
+```{r}
+multiclass.roc(training.labels ,xgb.pred)
+```
+
+
+<br>
+
+```{r}
+multiclass.roc(testing.labels ,xgb.pred)
+
+```
+
+\newline 
+
+This model has a testing AUC of 0.79 compared to our training AUC of 0.48. This means our model is significantly overfit.
+
+
+<br>
+
+```{r}
+library(tree)
+library(rpart)
+```
+
+<br>
+
+```{r}
+trainDF=JoinedDataNoNa[trainingInd,]
+trainDF$HighestInjuryType=as.factor(training.labels)
+
+testDF=JoinedDataNoNa[-trainingInd,]
+testDF$HighestInjuryType=as.factor(testing.labels)
+
+```
+
+<br>
+
+```{r}
+DT.model1=rpart( HighestInjuryType~., data =trainDF)
+rpart.plot::prp(DT.model1)
+```
+
+<br>
+
+```{r}
+tree.m1=tree(HighestInjuryType ~.  , data=trainDF)
+plot(tree.m1)
+text(tree.m1,pretty=1)
+
+```
+
+
+<br>
+
+```{r}
+Tree.CrashPred = predict(tree.m1, newdata=testDF,type="class")
+
+```
+
+<br>
+
+```{r}
+
+confusionMatrix(table(Tree.CrashPred,testDF$HighestInjuryType))
+
+
+```
+
+Our Accuracy for the decision tree model is $\approx 36 \%$ which is less than our xgboost model. 
+
+
+
+
+
+
