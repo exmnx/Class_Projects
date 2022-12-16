@@ -1,0 +1,208 @@
+---
+title: "Data Exploration on Japanese Population Density "
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Emily Mendez
+
+\newline 
+
+<br>
+
+## 1. Dataset 
+
+\newline
+
+This dataset is a subset from the United Nations Department of Economics and Social Affairs world population prospect data (a link to this set is provided below). The original dataset contained approximately 43,473 observations, 55 indicators, and location notes. By specifically focusing on the Japanese population from 1950 to 2022, I was able to subset the data to a 73 55 dimension. Factors studied in this set include various quantitative variables, such as total population, population density, median age, etc. 
+
+\newline 
+https://population.un.org/wpp/Download/Standard/MostUsed/
+
+\newline 
+
+The data in this proposal will be used to explore the relationships between variables in order to determine which factors affect the population density. With the data we are also able to analyze how each factor changes by time. 
+
+\newline
+ <br> 
+
+**Population Subset Description**
+
+\newline
+The variables included in the dataset will be listed below along with their designated descriptions and measurement units.
+
+```{r,echo=FALSE}
+indicatorI=read.csv('/Users/admin/Documents/Csvv/Indicator.csv',header=T)
+JapanPop=read.csv('/Users/admin/Documents/Csvv/japan.csv',header=TRUE)
+dim(JapanPop)
+knitr::kable(indicatorI[1:54,1:5],format="markdown")
+```
+\newline 
+
+United Nations, Department of Economic and Social Affairs, Population Division (2022). World Population Prospects 2022, Online Edition. 
+
+
+ <br> 
+ 
+**Data indicator type**
+```{r}
+attach(JapanPop)
+sapply(JapanPop,class)
+#The data is mostly numeric, with the exception of time which is an integer.
+```
+
+ <br>
+ 
+**Summary of data**
+```{r}
+summary(JapanPop)
+
+```
+
+\newline 
+Observing the summary output, many variables seem to have a wide range of values due to being population data. Some variables also seem to have quite a range between their mean and medians such as IMR, Infant deaths, Under5deaths, etc. The summary data also explains the difference between the mean and median grows as the mean passes one hundred. 
+
+\newline
+
+ <br>
+ 
+## 2. Preparing the data
+
+\newline
+
+After loading, prepare the data by deleting NA values from rows. 
+
+\newline 
+
+```{r}
+JapanPop=read.csv('/Users/admin/Documents/Csvv/japan.csv',header=TRUE)
+Finding_NaValues=function(data1){
+  temp=(ifelse(is.na(data1)=="TRUE",1,0)==1)
+  temp1=which(temp>0)
+  temp2=which(colSums(temp)>0)
+  out=cbind(temp1,temp2)
+  print(out)
+}
+Finding_NaValues(JapanPop)
+
+```
+
+\newline 
+In this case it seems that all our NA values are in column 13; therefore, we will remove the column.
+
+\newline 
+
+```{r}
+JapanPop=JapanPop[,-13]
+```
+
+\newline 
+
+<br>
+
+**Investigating Collinearity **
+
+\newline
+
+Checking the correlation between variables by using a correlation matrix will assist in finding other indicators of concern and help in reducing the dimension size. These factors that have high correlation among themselves indicate collinearity.
+
+\newline
+
+```{r}
+library(corrplot) #loading correlation plot maker
+corrPL=round(cor(JapanPop),3)
+corrplot(corrPL, method="circle",type = "upper", 
+         title="Correlation matrix of Variables",
+         mar = c(1,0,2,0),
+         na.label.col = "white",
+         tl.cex = 0.4,
+         tl.col = "black")
+```
+
+\newline
+To assess collinearity, we have already examined the correlation matrix. Now lets further examine a snippet of the data. 
+
+```{r}
+knitr::kable(corrPL[1:30,1:6],format="markdown")
+
+```
+
+\newline
+
+As shown most of the variables are correlated to each other, there seems to be little variance among the variables. Except CDR seems to be a good variable to use, a predictor variable in a linear regression model.
+
+\newline
+
+<br>
+
+
+## 3. Plotting variables
+```{r}
+diffs=(PopDensity-min(PopDensity))
+sizetmp = (2* ( diffs + 1) / max(diffs))^2
+pt_sizes = sizetmp
+
+plot(PopDensity~Time, xlab="Year",ylab="Population Density",
+     main="Relationship between time and Population Density",
+     col="orange", 
+     cex=pt_sizes)
+
+```
+
+\newline
+
+This graph shows the relationship between years and the population density of Japan. As the years go on the population density begins to decrease. Lets further investigate by examining the various factors such as births and deaths. 
+
+\newline
+
+```{r}
+matplot(y=Births,x=Time,type = "p",col="orange",ylab = "in thousands",xlab = "Years ")
+matlines(y=Deaths,x=Time,type = "p",col = "lightsteelblue")
+title(main  = "Relationship b/w time, death and birth",cex.lab = 2)
+#The orange line indicated Births and the blue line indicates deaths. 
+```
+
+\newline 
+As the years pass by the number of deaths increase and the number of births decrease. This means there are more people dying than being born which is a possible factor to consider for a decease in population growth and density. 
+
+\newline
+
+
+```{r}
+matplot(y=Time,x=MedianAgePop,type = "p",col="orange",ylab = "Years",xlab = "Age")
+title(main  = "An Aging population",cex.lab = 2)
+hist(MAC,breaks = 15,col=rgb(0,1,1,1/4),main="Mean age of childbearing")
+#The orange line indicated median age of the population
+
+```
+
+\newline 
+
+The first plot represents the median age increasing with time. Due to the increase in age in later years and the mean age of childbearing staying relatively the same, we can assume that the aging population affects population density. In the next model we will evaluate the correlation.
+
+```{r}
+model1=lm(PopGrowthRate~MedianAgePop)
+summary(model1)
+```
+\newline
+
+As we expected, the r^2 value is 0.91 meaning 91% of the variability in the mean of population growth rate can be explained by this linear model. 
+
+\newline
+
+<br>
+
+
+**In Conclusion**
+Most factors in this plot are highly correlated with population density, though many of these factors are also highly correlated to each other. Therefore, there is a need to eliminate some factors in order to produce a better fit linear model, if we were to create a linear regression model of some sort, due to the nature of this data, one variable would be enough to create predictive value because of the high correlations. 
+
+
+## References 
+1. United Nations, Department of Economic and Social Affairs, Population Division (2022). World Population Prospects 2022, Online Edition. 
+
+<br>
+
+
+

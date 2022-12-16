@@ -1,0 +1,468 @@
+---
+title: "Project_Part_3"
+author: "Emily Mendez"
+date: "11/16/2022"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Table of contents 
+
+#### 1. loading data
+
+#### 2. review of last model created 
+
+#### 3. splitting data to training and testing
+
+#### 4. Fitting linear model 
+
+#### 5. Shrinkage model (elastic)
+
+#### 6. Analyzing Lasso model
+
+#### 7. fitting tree with all variables / plotting
+
+#### 8.  pruning tree
+
+#### 9. analyzing and comparing error and accuracy 
+
+#### 10. Conclusion 
+
+
+
+
+<br>
+
+## Review 
+This dataset is a subset from the United Nations Department of Economics and Social Affairs world population prospect data (a link to this set is provided below). The subsetted Japanese population from 1950 to 2022 dataset contains approximately 73 observations, 55 indicators, and location notes. 
+
+<br>
+
+Column 6, population density is our response among all other predictor variables. 
+
+\newline 
+
+https://population.un.org/wpp/Download/Standard/MostUsed/
+
+
+## Loading in data 
+
+```{r}
+JapanPop=read.csv('/Users/admin/Documents/Csvv/japan.csv',header=TRUE)
+JapanPop=JapanPop[,-13]
+indicatorI=read.csv('/Users/admin/Documents/Csvv/Indicator.csv',header=TRUE)
+knitr::kable(indicatorI[1:10,1:5],format="markdown")
+```
+
+<br>
+
+## Libraries
+
+```{r}
+#loading in libraries 
+library(tree)
+library(caret)
+library(Metrics)
+library(glmnet)
+library(glmnetUtils)
+library(MLmetrics)
+
+```
+
+
+## Final Model from Linear Regression Analysis
+
+```{r}
+#Fitting linear model from project part 2
+lin.model=lm(PopDensity~LEx+Births1519+CDR+NetMigrations,data=JapanPop)
+summary(lin.model)
+```
+
+\newline
+
+The variables used in the model are LEx, Births1519, CDR, and NetMigrations. 
+
++ LEx: Life Expectancy at Birth, of both sexes
+
++ Births1519: Births by women aged 15 to 19 in thousands
+
++ CDR: Crude Death Rate	deaths per 1,000 population
+
++ NetMigrations: Net Number of Migrants in thousands
+
+\newline 
+
+*This model was created without data partitioning
+
+## Model Information 
+
+<br>
+
+```{r}
+#storing for later use
+#residual standard error measures sd of residuals 
+summ1=summary(lin.model)
+m1.rsq=summ1$r.squared
+m1.rse=summ1$sigma
+```
+
+<br>
+
+
+## Data Partitioning
+
+```{r}
+set.seed(123)
+trainInx=createDataPartition(JapanPop$Time,times=1,p=0.70,list=FALSE)
+training=JapanPop[trainInx,]
+testing=JapanPop[-trainInx,]
+```
+
+<br>
+
+## Fitting Linear model
+
+```{r}
+#testing error 
+train.lin.m1=lm(PopDensity~LEx+Births1519+CDR+NetMigrations,data=training)
+pred.lin.m1=predict(train.lin.m1,newdata = testing[,-6])
+m1.MSE = mean( (pred.lin.m1 - testing$PopDensity)^2 )
+m1.MSE
+```
+
+<br>
+
+```{r}
+#training error
+train.pred=predict(train.lin.m1,newdata=training)
+train.MSE.1 = mean( (train.pred - training$PopDensity)^2 )
+train.MSE.1 
+```
+<br>
+
+```{r}
+#summary of data info
+sum.1=summary(train.lin.m1)
+sum.1$adj.r.squared
+AIC(train.lin.m1)
+BIC(train.lin.m1)
+```
+
+
+## Elastic Net model 
+
+```{r}
+#removing top asscociated columns since I did the same in the previous project parts
+train.elasNt=cva.glmnet(PopDensity~.,data=training[,-c(1:5)])
+```
+
+
+```{r}
+plot(train.elasNt)
+
+```
+
+MSE drastically increases as $\lambda$ approaches 2 or 3. 
+
+
+<br>
+
+```{r,echo=FALSE}
+#lambda.min : λ of minimum mean cross-validated error
+#lambda.1se : largest value of λ such that error is within 1 standard error of the cross-validated errors for lambda.min.
+
+```
+
+<br>
+
+```{r}
+set.seed(123)
+#fitting elastic net model
+elasticNet.fit=train(PopDensity~.,data=training[,-c(1:5)],method="glmnet",
+                     trControl=trainControl(method = "cv",number=5))
+
+
+```
+
+<br>
+
+```{r}
+#seeing which paramters the model chose
+elasticNet.fit
+```
+\newline 
+
+The best model used $\alpha = 1$, therefore is classified as a Lasso model. 
+
+<br>
+
+```{r}
+#predicting the model with test data/ test error 
+elnet.pred=predict(elasticNet.fit,newdata = testing[,-c(1:5)])
+m2.MSE = mean( (elnet.pred- testing$PopDensity)^2 )
+m2.MSE
+
+```
+\newline
+
+The MSE for my elastic net model is 18.621 which is larger than my linear regression model which is 16.25858 by 2.40. 
+
+<br>
+
+```{r}
+#training error 
+elnet.pred.tr=predict(elasticNet.fit,newdata = training[,-c(1:5)])
+train.MSE.2 = mean( (elnet.pred.tr- training$PopDensity)^2 )
+train.MSE.2
+
+```
+
+
+## Lasso 
+
+```{r}
+#standardizing columns 
+set.seed(124)
+trainingstd= apply(training[,-c(1:5)], 2, function(x){x/sd(x)})
+testingstd = apply(testing[,-c(1:5)], 2, function(x){x/sd(x)})
+```
+
+<br>
+```{r}
+
+```
+
+```{r}
+#fitting a lasso model
+lasso.fit = cv.glmnet(x=trainingstd[,-c(1)], y=trainingstd[,1], alpha=1,type.measure="mse")
+```
+
+
+```{r}
+#looking at the variable selection
+print(coef(lasso.fit, s="lambda.1se"))
+```
+
+<br>
+
+The features with the largest coefficients are the meaningful features.
+
+\newline
+
+Births1519, and CDR were meaningful features used in the lasso model as well as my linear model. 
+
+<br>
+
+```{r}
+#predicting model with testign data
+lasso.pred=predict(lasso.fit,s="lambda.min",newx = testingstd[,-c(1)])
+
+#lasso.fit$lambda.min
+```
+
+<br>
+
+```{r}
+#test error 
+m3.MSE= mean((lasso.pred - testingstd[,1])^2)
+m3.MSE
+
+```
+<br>
+
+```{r}
+#training error 
+lasso.pred.tr=predict(lasso.fit,s="lambda.min",newx = trainingstd[,-c(1)])
+train.MSE.3= mean((lasso.pred.tr- trainingstd[,1])^2)
+train.MSE.3
+```
+
+
+
+## Decision Tree model
+
+```{r}
+#fitting decision tree
+tree.fit=tree(PopDensity~.,data=training[,-c(1:5)])
+summary(tree.fit)
+```
+\newline
+
+The tree has 5 nodes. The 3 variables that were picked out to make this specific tree are 
+"LE65","PopSexRatio" ,"NRR". 
+
+\newline
+
+LE65: Life Expectancy at Age 65, both sexes
+
+\newline
+
+PopSexRatio: Population Sex Ratio, as of 1 July
+
+\newline
+
+NRR: Net Reproduction Rate; surviving daughters per woman
+
+<br>
+
+
+```{r}
+tree.fit
+```
+
+\newline
+
+Node 2 represents the Life expectancy at the age of 65 and how many years the person has left to live. This splits at $\approx15$ years. There are 18 observations in this branch and the overall prediction of population density was 257.3 in thousands. 
+
+<br>
+
+
+```{r}
+plot(tree.fit)
+text(tree.fit,pretty=1)
+
+```
+
+
+<br>
+
+```{r}
+#library(rpart)
+#library(rpart.plot)
+
+#tree.fit1=rpart(PopDensity~.,data=training[,-c(1:5)])
+#prp(tree.fit1)
+
+```
+
+
+```{r}
+pred.m1=predict(tree.fit,newdata = testing[,-c(1:5)])
+m4.MSE=mean((pred.m1- testing$PopDensity)^2)
+m4.MSE
+
+```
+<br>
+
+```{r}
+#training error
+pred.train=predict(tree.fit,newdata = training[,-c(1:5)])
+train.MSE.4=mean((pred.train- training$PopDensity)^2)
+train.MSE.4
+
+```
+
+
+
+\newline 
+Lets see if we should prune this tree to lower our MSE
+
+<br>
+
+```{r}
+#pruning info
+cvTree.m1=cv.tree(tree.fit)
+par(mfrow = c(1, 2))
+plot(cvTree.m1$size, cvTree.m1$dev, type = "b",xlab="Number of Nodes",ylab = "Cross Validation Error")
+plot(cvTree.m1$k, cvTree.m1$dev, type = "b",xlab="K ",ylab = "Cross Validation Error")
+
+```
+
+
+<br>
+
+Our MSE for this decision tree was a lot higher compared to our other models. Unfortunately this is as good as this tree model gets specifically in this partition, these variables and nodes as the cv error is the best at 5 nodes. Further, it would be best to examine multiple trees with a random forest or xgboost to get a better mse for our dataset. 
+
+<br>
+
+## Results 
+
+**Linear Regression**
+
+```{r}
+#linear regression
+#R^2 adj
+sum.1$adj.r.squared
+
+#Test error 
+m1.MSE
+
+#training error
+train.MSE.1
+
+```
+
+<br>
+
+**Elastic net**
+
+```{r}
+#elastic net
+#R^2
+print(1 - m2.MSE / var(testing$PopDensity))
+#test error
+m2.MSE
+#train error
+train.MSE.2
+
+```
+
+<br>
+
+**LASSO**
+
+```{r}
+#Lasso
+#R^2
+rsq=1 - lasso.fit$cvm /var(trainingstd[,1])
+rsq
+plot(lasso.fit$lambda,rsq)
+```
+
+<br>
+
+
+```{r}
+#Lasso
+#test error
+m3.MSE
+#train error
+train.MSE.3
+
+```
+
+<br>
+
+**Decision Tree**
+
+```{r}
+#decision tree R^2
+print(1 - m4.MSE / var(testing$PopDensity))
+#test error
+m4.MSE
+#train error 
+train.MSE.4
+
+
+```
+
+<br>
+
+My top models were the LASSO and linear Regression model with a test MSE of 12.12 and 16.26 respectively. The variables that predicted the population density the best were LE65, PopSexRatio, and Births 1519. Observing these predictors indicates that there is little to no collinearity between these three as they all are taken from different topics. With LE65, PopSexRatio, and Births 1519 coming from morality, population and fertility subjects respectively.
+
+
+
+
+
+
+
+
+
+
+
+

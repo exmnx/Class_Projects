@@ -1,0 +1,315 @@
+---
+title: " Linear Analysis on Project Data"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Emily Mendez
+
+\newline 
+
+<br>
+
+## Preparing the Data 
+From the previous data exploration of the Japanese Population Density, we found high traces of multicollinearity between variables. As most variables in the dataset have association with population or have population in their names of course we would be seeing high traces of association between the response and other variables. Therefore, as seen later in the report we will be removing perfect fit models as they are essentially the same as the population density and we want to explore a model that will involve the use of multiple variables to achieve a better fit model that is not as perfect. 
+
+\newline
+
+As seen in the correlation matrix plot, the first variables in the data are population variables with high correlation with each other. Now if we wanted to plot a model accurately predicting the population density, these variables would accurately predict that separately. As stated before these predictors are extremely similar as in any way measuring population would be. In this project I want to explore the variables with little to no correlation with the response and maximize the $R^{2}$ value and decrease the SE to create a parsimonious model. 
+
+<br>
+
+```{r}
+#Loading in the data and removing NAs
+JapanPop=read.csv('/Users/admin/Documents/Csvv/japan.csv',header=TRUE)
+attach(JapanPop)
+JapanPop=JapanPop[,-13]
+```
+
+
+```{r}
+#loading in libraries 
+library(olsrr)
+```
+
+\newline  
+
+<br>
+
+## Creating the perfect model
+
+\newline
+
+As stated above, I wanted to demonstrate the similar variable along with the response which would be our perfect model. This will be shown in the forward selection of all variables in the dataset. Here we would expect the forward selection on the original dataframe to add only one variable since one of the variables exactly correlates to the population density. This variable would be TpopulationJuly; this indicates the total population as of July 1 and PopDensity indicates the population Density as of July 1.
+
+```{r}
+Testmodel=lm(PopDensity~.,data = JapanPop)
+ols_step_forward_p(Testmodel)
+```
+
+\newline 
+
+> Therefore, because we already found our perfect model and other variables are also almost perfect, we would want to explore a relationship where lowly correlated variables (with respect to the response) are able to be useful in predicting the response. 
+
+<br>
+
+## Assessing Collinearity 
+
+Detection of collinearity could produce unreliable estimates and errors; therefore, In this section we will be assessing collinearity once again between our variables. Here we create a function to sum how many variables have a moderate to high correlation $x>0.65$ and subset the variables that have a lower one. 
+
+\newline 
+
+```{r}
+#Checking correlations
+corMat=round(cor(JapanPop),3)
+temp1=length(colnames(JapanPop))
+```
+
+<br>
+
+```{r}
+#Creating function to get rid of variables with high correlation among each other
+#In order to see high correlations we take the absolute value of them from the corrMatrix
+temp=ifelse(abs(corMat)>0.65,1,0)
+checkMC=function(x){
+  var=sum(temp[x,])-1
+  return(var)
+}
+#Subtracting 1 because of the correlation they have with themselves
+```
+
+<br>
+
+```{r}
+#Looking at which variables have the highest amount of correlation with other predictors  
+vec=seq(1:temp1)
+NoCol=sapply(vec,checkMC)
+CorrVar=cbind(colnames(temp),NoCol)
+CorrVar
+
+#we will model the ones with 43 or below, just to have variables to pick from
+
+```
+
+\newline 
+
+> As expected many of our variables are highly correlated with each other; furthermore, we will have to remove these variables and test the others. We set our standard of separation as the mean of the number of variables associated. Notice that the amount of variables we have is 53 not including our response. 
+
+<br>
+
+```{r}
+#Which values are less than the mean
+numericCol=as.numeric(CorrVar[,2])
+temp2=which(numericCol< mean(numericCol))
+temp2
+```
+
+\newline
+
+> Now we find the predictors associated with the row numbers. Its possible to just look at the data given above but we can calculate it as well.
+
+<br>
+
+```{r}
+findingColNames=function(temp2GoesHere){
+  ColNam=CorrVar[temp2GoesHere,1]
+  ColNum=CorrVar[temp2GoesHere,2]
+  Cbin=cbind(ColNam,ColNum)
+  return(Cbin)
+}
+findingColNames(temp2)
+
+```
+
+> We will be considering 14 predictors 
+
+<br>
+
+## Subsetting the Data and Assessing collinearity 
+
+\newline
+
+```{r}
+#subsetted data
+JapPopD1 =JapanPop[,c(6,7,11,14,18,19,20,21,22,23,36,39,43,53,54)]
+head(JapPopD1)
+```
+
+```{r}
+#same method for assessing correlations among each other
+corMat2=round(cor(JapPopD1),3)
+temp3=ifelse(abs(corMat2)>0.65,1,0)
+
+checkMC2=function(x){
+  var=sum(temp3[x,])-1
+  return(var)
+}
+
+var1=length(colnames(JapPopD1))
+vec1=seq(1:var1)
+num1=sapply(vec1,checkMC2)
+CorrVar=cbind(colnames(temp3),num1)
+CorrVar
+
+```
+
+\newline
+ 
+> In this data set we have 15 variables, here we see that some predictors have a moderate to high correlation to other variables in this subset. Therefore, instead of subsetting to another dataframe we will begin to build a model with the variables that have a less number. 
+
+<br>
+
+
+## Building models
+
+\newline
+
+#### Model 1
+
+```{r}
+#variables with a less than 7 from the data above. 
+
+lin.model=lm(PopDensity~Births1519+SRB+CDR+InfantDeaths+Under5Deaths+Q0040Female+NetMigrations+CNMR,data=JapPopD1)
+summary(lin.model)
+```
+\newline 
+
+> As shown above 2 variables are insignificant in this model, SRB and CDR. Although maybe if we remove some variables they may become significant to that specifc model. Although the $R^{2}$ in this model is at 0.99 meaning approximately 99% of the variablility in the mean population density can be explained by this linear model, there could be significant collinearity again and therefore rend that useless. 
+
+<br>
+
+```{r}
+ols_vif_tol(lin.model)
+```
+
+\newline
+
+> The variance inflation factor for the 1st model remains significantly high for most of the predictor variables. As the VIF exceeds 10 and the tolerance is extremely close to zero, we consider this model not good and move on to fit another.
+
+> It is possible to remove CNMR or Netmigrations as they correlate with one another. We can also choose 1 variable that relates to death to try and lower the VIF. Its also possible to use a variable that has a high correlation with the response variable in order to make a better fitting model along with our lower correlated variables in respect to the response. 
+
+<br>
+
+#### Model 2
+
+```{r}
+#removing variables from model 1
+#Removed Under5deaths and CNMR
+
+lin.model2=lm(PopDensity~Births1519+SRB+CDR+InfantDeaths+NetMigrations,data=JapPopD1)
+ols_vif_tol(lin.model2)
+```
+\newline 
+
+> The VIF has lowered below 10 and the tolerance seems to be a bit far from 0. Now we can move on to the summary. 
+
+<br>
+
+```{r}
+summary(lin.model2)
+```
+
+\newline
+
+> All pvalues are significant when the $\alpha=0.05$. We expect most of the observations in the model to lie within 14.588 (2S) units of the least square regression line.  
+
+> Questions to ask, is it possible to increase the $R^{2}$ and decrease the Residual standard error by adding a variable that has a moderately high correlation with the response. 
+
+<br>
+
+#### Model 3
+
+
+In the model below, we will be using the variable LEx, the life expectancy at Birth for both sexes. What correlation does this variable have with the population density?
+
+\newline
+
+```{r}
+cor(LEx,PopDensity)
+```
+
+\newline 
+
+> $r=0.9764$ which indicates that there is a strong positive correlation between them.
+
+<br>
+
+
+```{r}
+# Adding LEx to the model
+lin.model3=lm(PopDensity~LEx+Births1519+SRB+CDR+InfantDeaths+NetMigrations)
+summary(lin.model3)
+```
+
+\newline
+
+> In this model the pvalue of Births1519, SRB, and NetMigrations are insignificant. 
+
+<br>
+
+```{r}
+ols_vif_tol(lin.model3)
+```
+
+\newline 
+
+> The VIF value is extremely high to reduce it we will remove SRB because of its insignificance. 
+
+<br>
+
+#### Model 4
+
+```{r}
+# removing SRB
+lin.model4=lm(PopDensity~LEx+Births1519+CDR+NetMigrations,data=JapanPop)
+summary(lin.model4)
+```
+\newline
+
+> It seems all the pvalues are greater than $\alpha=0.05$ and are statistically significant. The $R^{2}=0.99$ which is very high for our model.
+
+<br>
+
+```{r}
+ols_vif_tol(lin.model4)
+```
+\newline
+
+> Our VIF is low and tolerance is above 0.0. There is officially little collinearity in our model. 
+
+<br>
+
+## Diagnositcs 
+
+```{r}
+plot(lin.model4)
+```
+
+<br>
+
+
+\newline
+
+#### Fitted Vs Residuals
+
+> The fitted vs residuals plot shows a pattern toward the end where there is an increase in residuals as fitted values pass 280 and then stabilizes again. This indicates a possible violation of linearity. There also seems to be an increase in error variance as the fitted values increase. 
+
+\newline 
+
+
+#### Normal QQ
+
+> The normal QQ plot shows the line to have two light tails, left skewed and little curvature in general. Possible outliers might occur on the left tail.
+
+\newline 
+
+#### Fitted Vs Leverage
+
+> Our residuals vs leverage plot has close points to which the value almost becomes an influential point like 1. There seems to be possible outliers in our data such as 8, 1, and 73.
+
+
+<br>
+
+
