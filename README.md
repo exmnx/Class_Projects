@@ -11,3 +11,6 @@ Is a simple data exploration as seen from the html file and consists of finding 
 
 **Project 2**:
 This project consists of an xgboost to predict the highest level of injury you can obtain from a crash. The data was collected from the department of transportation from San Jose. Unfortunately, no imputations were done on this dataset.
+
+
+Languages used: R with Rmd
