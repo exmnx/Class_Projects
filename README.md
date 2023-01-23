@@ -7,7 +7,7 @@ Is a simple data exploration as seen from the html file and consists of finding 
 
 - Project Part 1: Data Exploration 
 - Project Part 2: Linear Regression without train/test set
-- Project Part 3: Various model application for variable selection and Accuracy Improvement 
+- Project Part 3: Various model application for variable selection and accuracy improvement 
 
 **Project 2**:
 This project consists of an xgboost to predict the highest level of injury you can obtain from a crash. The data was collected from the department of transportation from San Jose. Unfortunately, no imputations were done on this dataset.
