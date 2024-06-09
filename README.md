@@ -15,4 +15,4 @@ This project consists of an xgboost to predict the highest level of injury you c
 
 Languages used: R with Rmd
 
-*To make Project 1 better I should have created two models, one for an increase in population and the other for the decrease to study the factors that affected the popDensity. 
+
